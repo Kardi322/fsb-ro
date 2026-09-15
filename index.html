@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Справочник кодексов Россия Онлайн: поиск статей, наказания, расчёт сроков и памятка по задержанию.">
+  <meta name="theme-color" content="#0b0d10">
+  <title>Кодексы РО — правовой справочник</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./data.js" defer></script>
+  <script src="./logic.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+  <header class="site-header">
+    <a class="brand" href="#uk" aria-label="Кодексы РО — главная"><span class="brand-mark">РО<span>§</span></span><span>КОДЕКСЫ <b>РО</b><small>ПРАВОВОЙ СПРАВОЧНИК</small></span></a>
+    <nav aria-label="Кодексы">
+      <button data-view="uk" class="nav-button active" aria-current="page">Уголовный кодекс</button>
+      <button data-view="pk" class="nav-button">Процессуальный кодекс</button>
+      <button data-view="constitution" class="nav-button">Конституция</button>
+    </nav>
+    <span class="edition">РОССИЯ ОНЛАЙН<span>По вашим документам</span></span>
+  </header>
+  <main id="main" tabindex="-1"></main>
+  <footer><span>Кодексы РО <span class="footer-dot">/</span> Россия Онлайн</span><span>Источник — предоставленные тексты · Импорт 15.09.2026</span></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="source-dialog" aria-labelledby="source-title"><div class="dialog-head"><span class="eyebrow">ТЕКСТ ИСТОЧНИКА</span><button class="icon-button" id="close-dialog" aria-label="Закрыть">×</button></div><h2 id="source-title"></h2><div id="source-body"></div></dialog>
+  <noscript>Для поиска и расчёта включите JavaScript. Исходные кодексы доступны в текстовых файлах проекта.</noscript>
+</body>
+</html>
+
