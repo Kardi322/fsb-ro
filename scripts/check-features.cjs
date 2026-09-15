@@ -1,0 +1,42 @@
+const fs = require('node:fs');
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const features = require('../features.js');
+const logic = require('../logic.js');
+const context = {window:{}};
+vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../data.js'),'utf8'), context);
+const articles = context.window.RO_DATA.uk.articles;
+const a = n => articles.find(x=>x.number===n);
+const state = { mode:'simplified', exception:true, favorites:new Set(['6.2','10.11']), selected:new Map([
+  [a('6.2').id,{article:a('6.2'),type:'prison',amount:null}],
+  [a('10.11').id,{article:a('10.11'),type:'fine',amount:25000}]
+])};
+const encoded = features.encode(state);
+const restored = features.decode(encoded, articles);
+assert.deepEqual([...restored.favorites],['6.2','10.11']);
+assert.equal(restored.mode,'simplified'); assert.equal(restored.exception,true);
+assert.equal(restored.selected.get(a('10.11').id).amount,25000);
+assert.equal(restored.selected.get(a('10.11').id).type,'fine');
+assert.equal(restored.selected.size,2);
+assert.equal(features.decode(encoded,articles.map(x=>({...x,id:'new-'+x.id}))).selected.size,2);
+assert.throws(()=>features.decode('{broken', articles));
+assert.throws(()=>features.decode('{"version":5}', articles));
+const corrupt = features.decode(JSON.stringify({version:1,mode:'invalid',favorites:['missing','6.2',null],selected:[null,{number:'gone'},{number:'6.2',type:'fine',amount:-12},{number:'10.11',type:'fine',amount:'123'}]}),articles);
+assert.equal(corrupt.selected.size,2); assert.equal(corrupt.mode,'maximum');
+assert.equal(corrupt.selected.get(a('6.2').id).type,'prison');
+assert.equal(corrupt.selected.get(a('6.2').id).amount,null);
+assert.equal(corrupt.selected.get(a('10.11').id).amount,null);
+assert.deepEqual([...corrupt.favorites],['6.2']);
+assert.equal(features.decode(features.encode({...state,selected:new Map()}),articles).selected.size,0);
+assert.deepEqual(features.ranges('Взятки и взятка',logic.searchTerms('взятка')),[[0,5],[9,14]]);
+assert.deepEqual(features.ranges('Тяжёлый',logic.searchTerms('тяжел')),[[0,5]]);
+assert.deepEqual(features.ranges('оружие', ['оруж','оружие']),[[0,6]]);
+assert.deepEqual(features.ranges('x [.*] y', ['[.*]']),[[2,6]]);
+assert.deepEqual(features.ranges('Без совпадений', []),[]);
+assert.ok(logic.matches(a('15.4'),'взятка'));
+assert.ok(logic.matches(a('15.5'),'взятка'));
+assert.ok(features.inTopic(a('15.4'),'service'));
+assert.ok(features.inTopic(a('6.9'),'transport'));
+assert.ok(!features.inTopic(a('5.8'),'weapons'));
+for(const topic of features.topics) assert.ok(articles.some(a=>features.inTopic(a,topic.id)),topic.id+' not empty');
+console.log('Persistence, malformed saved data, stable article numbers, fine alternatives, search highlighting and all topic filters passed.');

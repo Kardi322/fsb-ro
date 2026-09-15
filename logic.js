@@ -1,6 +1,10 @@
 (function (root) {
   'use strict';
   const normalize = value => String(value).toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+  function searchTerms(query) {
+    const forms = { 'взятка': 'взятк', 'оружие': 'оруж', 'наркотики': 'наркот', 'удостоверение': 'удостоверени' };
+    return normalize(query).replace(/^(?:статья|ст\.)\s*/, '').split(' ').filter(Boolean).map(t => forms[t] || t);
+  }
   function matches(article, query) {
     let q = normalize(query).replace(/^(?:статья|ст\.)\s*/, '');
     if (!q) return true;
@@ -10,7 +14,7 @@
       q = q.slice(number[0].length).trim();
     }
     const text = normalize(article.fullText);
-    return q.split(' ').filter(Boolean).every(word => text.includes(word));
+    return searchTerms(q).every(word => text.includes(word));
   }
   function calculate(items, mode, insultException) {
     const prison = items.filter(i => i.type === 'prison');
@@ -27,7 +31,7 @@
       invalidFine: mode === 'simplified' && fineItems.length > 0,
       hasUpperBound: prison.some(i => !i.article.exactTerm) };
   }
-  const api = { normalize, matches, calculate };
+  const api = { normalize, matches, calculate, searchTerms };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RO_LOGIC = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -79,3 +79,43 @@ input::placeholder { color: #929ba8; opacity: 1; }
 button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible {
   outline-color: #92bee8;
 }
+
+/* Quick access, favorites and clearer article metadata. */
+.quick-filters{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.quick-chip{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;background:#171b22;border:1px solid #343c48;border-radius:20px;color:#b8c4d3;font-size:.8125rem;line-height:1.4}
+.quick-chip:hover{background:#232e3c;border-color:#6885a5;color:#e6effa}
+.quick-chip.active{background:#283d56;border-color:#7ca6cf;color:#edf6ff}
+.favorite-chip>span:first-child{color:#eac26d}
+.favorite-chip.active{background:#3b301c;border-color:#b3914e;color:#ffe0a0}
+.quick-chip>span:last-child:not(:first-child){font-size:.75rem;opacity:.85}
+.article-number{font-size:1.9rem;line-height:1.15;letter-spacing:-.035em;color:#eef3fa;flex-shrink:0}
+.article-number small{display:block;font-size:.625rem;color:#a0adbe;letter-spacing:.13em;margin-bottom:5px;font-weight:600}
+.article-top{align-items:flex-start;margin-bottom:17px}
+.article-top-actions{display:flex;gap:12px;align-items:flex-start;justify-content:flex-end;min-width:0}
+.departments{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;padding-top:4px}
+.department-badge{display:inline-block;padding:5px 8px;border:1px solid transparent;border-radius:5px;font-size:.75rem;font-weight:650;line-height:1.4;letter-spacing:.02em}
+.department-badge.fsb{background:#172f50;border-color:#335c8a;color:#a9d3ff}
+.department-badge.mvd{background:#242952;border-color:#484e90;color:#c1caff}
+.department-badge.sk{background:#421f30;border-color:#79415a;color:#ffc0d6}
+.department-badge.military{background:#24332c;border-color:#425b4b;color:#bbd6c2}
+.favorite-button{flex-shrink:0;display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid #3b4451;border-radius:8px;background:#1a2028;color:#afbbca;font-size:1.6rem;line-height:1}
+.favorite-button:hover{border-color:#dfb65e;color:#ffda83;background:#322a1b}
+.favorite-button.active{border-color:#a78748;color:#ffce65;background:#342b1a}
+.article-actions{flex-wrap:wrap}
+.wanted-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid #736039;border-radius:5px;background:#302918;color:#f1d083;font-size:1rem;letter-spacing:.07em;line-height:1.2;white-space:nowrap}
+.wanted-label{font-size:.6875rem;letter-spacing:0;font-weight:600}
+.wanted-badge.level-3{background:#392719;color:#ffbe80;border-color:#825b36}
+.wanted-badge.level-4,.wanted-badge.level-5{background:#3d2025;color:#ffa2a8;border-color:#8b4b54}
+.wanted-badge.level-5{background:#4c2029;border-color:#b25c6d;color:#ffb5c5}
+.empty-stars{opacity:.45}
+.tag.term{background:#203750;color:#d0e9ff;border:1px solid #436689}
+.tag.record{background:#47222a;color:#ffbcc5;border:1px solid #984d5b;font-weight:600}
+.tag.fine{background:#3b301a;color:#ffe0a0;border:1px solid #8a703d;font-weight:600}
+.tag.muted{border:1px solid #363f4c}
+mark{background:#b99442;color:#11151b;border-radius:3px;padding:0 2px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.match-excerpt{font-size:.875rem;line-height:1.8;color:#bdc7d4;border-left:2px solid #6a85a3;padding-left:12px;margin:0 0 16px;white-space:pre-line;overflow-wrap:anywhere}
+.excerpt-label{display:block;font-size:.6875rem;line-height:1.5;text-transform:uppercase;letter-spacing:.07em;color:#92a4b9;margin-bottom:6px}
+.save-status{font-size:.75rem;line-height:1.7;color:#a0adbe;margin:15px 0 0}
+.save-status.save-error{color:#ffd394}
+@media(max-width:520px){.article-number{font-size:1.7rem}.article-top-actions{gap:7px}.departments{gap:4px}.department-badge{font-size:.6875rem;padding:4px 6px}.favorite-button{width:36px;height:36px}.wanted-badge{order:-1;margin-right:auto}.article-actions .source-button{margin-right:auto}.quick-chip{font-size:.8125rem;padding:8px 11px}.article-actions{gap:6px 12px}}
+@media(max-width:360px){.wanted-badge{flex-basis:100%;justify-content:center}.article-top-actions{flex:1}.departments{max-width:145px}}

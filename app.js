@@ -1,11 +1,45 @@
 (() => {
   'use strict';
-  const data = window.RO_DATA, logic = window.RO_LOGIC;
+  const data = window.RO_DATA, logic = window.RO_LOGIC, features = window.RO_FEATURES;
   const $ = (s, root = document) => root.querySelector(s);
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = n => new Intl.NumberFormat('ru-RU').format(n);
   const state = { view: 'uk', scope: 'special', query: '', chapter: '', department: '', penalty: '', limit: 20, mode: 'maximum', exception: false, selected: new Map(), pkMode: 'guide', docQuery: '', docChapter: '', docLimit: 25 };
   const articles = new Map(Object.values(data).filter(x => x?.articles).flatMap(x => x.articles).map(a => [a.id, a]));
+  state.favorites = new Set(); state.favoritesOnly = false; state.topic = '';
+  const storageKey = 'ro-codex:' + (location.pathname.replace(/index\.html$/, '').replace(/\/$/, '') || '/') + ':v1';
+  let storageStatus = 'ready';
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (raw) Object.assign(state, features.decode(raw, data.uk.articles));
+  } catch { storageStatus = 'error'; }
+  function saveState() {
+    try { localStorage.setItem(storageKey, features.encode(state)); storageStatus = 'saved'; }
+    catch { storageStatus = 'error'; }
+    updateSaveStatus();
+  }
+  function updateSaveStatus() {
+    const status = $('#save-status');
+    if (!status) return;
+    status.textContent = storageStatus === 'error' ? 'Сохранение недоступно. Скопируйте расчёт перед закрытием.' : 'Расчёт и избранное сохраняются в этом браузере';
+    status.classList.toggle('save-error', storageStatus === 'error');
+  }
+  function highlight(text, query) {
+    const ranges = features.ranges(text, logic.searchTerms(query));
+    let html = '', last = 0;
+    for (const [start, end] of ranges) { html += esc(text.slice(last, start)) + '<mark>' + esc(text.slice(start, end)) + '</mark>'; last = end; }
+    return html + esc(text.slice(last));
+  }
+  function matchExcerpt(text, query) {
+    const ranges = features.ranges(text, logic.searchTerms(query));
+    if (!ranges.length) return '';
+    const start = Math.max(0, ranges[0][0] - 75), end = Math.min(text.length, Math.max(start + 240, ranges[0][1]));
+    return (start ? '…' : '') + highlight(text.slice(start, end), query) + (end < text.length ? '…' : '');
+  }
+  function quickFilters() {
+    const favoriteButton = `<button class="quick-chip favorite-chip ${state.favoritesOnly ? 'active' : ''}" data-favorites-only aria-pressed="${state.favoritesOnly}"><span aria-hidden="true">★</span> Избранное <span>${state.favorites.size}</span></button>`;
+    return favoriteButton + features.topics.map(t => `<button class="quick-chip ${state.topic === t.id ? 'active' : ''}" data-topic="${t.id}" aria-pressed="${state.topic === t.id}">${t.label}</button>`).join('');
+  }
   const departments = { 'Ф': 'ФСБ', 'Р': 'МВД', 'В': 'Военная полиция', 'С': 'СК' };
   const searchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></svg>';
   function source(kind, number, chapter) { return data[kind].articles.find(a => a.number === number && (!chapter || a.chapterTitle.startsWith(`Глава ${chapter}.`))); }
@@ -20,24 +54,38 @@
   function scopes() { return [['special', 'Особенная часть', data.uk.articles.filter(a => a.special).length], ['general', 'Общая часть', data.uk.articles.filter(a => !a.special).length], ['all', 'Все статьи', data.uk.articles.length]].map(([id, title, count]) => `<button class="scope-button ${state.scope === id ? 'active' : ''}" data-scope="${id}" aria-pressed="${state.scope === id}">${title}<span>${count}</span></button>`).join(''); }
   function renderUK() {
     $('#main').innerHTML = heading('Уголовный кодекс', 'БЫСТРЫЙ ДОСТУП К НОРМАМ', 'Найдите статью. Проверьте санкцию. Рассчитайте наказание.', 'uk') + `<div class="workspace"><section aria-label="Поиск и статьи">${searchBox('article-search', 'Номер статьи или ключевое слово', state.query)}<div class="filter-row"><select id="chapter-filter" aria-label="Глава уголовного кодекса"><option value="">Все главы</option>${data.uk.chapters.map(c => `<option value="${c.id}" ${state.chapter === c.id ? 'selected' : ''}>${esc(c.title)}</option>`).join('')}</select><select id="department-filter" aria-label="Ведомство"><option value="">Все ведомства</option>${Object.entries(departments).map(([id, label]) => `<option value="${id}" ${state.department === id ? 'selected' : ''}>${label}</option>`).join('')}</select><select id="penalty-filter" aria-label="Наказание и судимость"><option value="">Все санкции</option><option value="fine" ${state.penalty === 'fine' ? 'selected' : ''}>Есть штраф</option><option value="record" ${state.penalty === 'record' ? 'selected' : ''}>С записью о судимости</option><option value="no-record" ${state.penalty === 'no-record' ? 'selected' : ''}>Без отметки о судимости</option></select></div><div class="scope-row" id="scopes" aria-label="Части кодекса">${scopes()}</div><a href="#calculator" class="mobile-calc-link">К расчёту наказания <span id="mobile-count">(${state.selected.size})</span> ↓</a><div id="results-meta" class="results-meta" aria-live="polite"></div><div id="article-list"></div><details class="data-notes"><summary>Как читать санкции и расчёт</summary><p>Сроки сохранены в месяцах, как в Особенной части. «До» означает верхний предел. Ст. 17.12.1 содержит точный срок — 50 месяцев. Реальное игровое время не пересчитывается: коэффициент в документах не задан.</p><p>Отметка в протоколе при аресте нужна при приоритете 4–5 (${ref('uk', '5.8')}). Это отдельный вопрос от общего правового статуса судимости (${ref('uk', '1.9')}). При уголовном штрафе судимость не возникает; вид штрафа по ст. 10.11 не уточнён.</p><p>В источниках есть расхождения: ${ref('uk', '5.11')} ч. 3 упоминает штраф в упрощённом порядке, но ${ref('uk', '5.2')} ч. 5 и ${ref('pk', '2.9', 'II')} ч. 5 запрещают его. В упрощённом режиме расчёт со штрафом помечается как недопустимый. Правила полномочий по назначению штрафа в ст. 5 УК также расходятся; полномочия проверяются отдельно.</p><p>Ст. 11.12 содержит формулировку «месяцев лишения» без слова «свободы»; текст источника сохранён. В расчёте эта санкция учтена как срок в месяцах.</p></details></section><aside class="calculator" id="calculator" aria-label="Калькулятор наказания"></aside></div>`;
+    $('#scopes').insertAdjacentHTML('beforebegin', '<div class="quick-filters" id="quick-filters" aria-label="Быстрые фильтры"></div>');
     updateResults(); renderCalculator();
   }
   function filteredArticles() {
-    return data.uk.articles.filter(a => (state.scope === 'all' || a.special === (state.scope === 'special')) && (!state.chapter || a.chapter === state.chapter) && (!state.department || a.departments.includes(state.department)) && (!state.penalty || (state.penalty === 'fine' ? a.fine : state.penalty === 'record' ? a.record : a.sanction && !a.record)) && logic.matches(a, state.query)).sort((a,b) => {
+    return data.uk.articles.filter(a => (state.scope === 'all' || a.special === (state.scope === 'special')) && (!state.chapter || a.chapter === state.chapter) && (!state.department || a.departments.includes(state.department)) && (!state.penalty || (state.penalty === 'fine' ? a.fine : state.penalty === 'record' ? a.record : a.sanction && !a.record)) && (!state.favoritesOnly || state.favorites.has(a.number)) && features.inTopic(a, state.topic) && logic.matches(a, state.query)).sort((a,b) => {
       const n = state.query.replace(/^(?:статья|ст\.)\s*/i, '').trim();
       return Number(b.number === n) - Number(a.number === n);
     });
   }
   function card(a) {
-    const selected = state.selected.has(a.id);
-    const term = a.months ? `${a.exactTerm ? '' : 'До '}${a.months} мес.` : '';
-    return `<article class="article-card ${selected ? 'selected' : ''}" id="card-${a.id}"><div class="article-top"><span class="article-number">СТ. ${a.number}</span><span class="department">${a.departments.map(d => esc(departments[d] || d)).join(' / ')}</span></div><h2>${esc(a.title)}</h2>${a.sanction ? `<div class="sanctions"><span class="tag term">${term} лишения свободы</span><span class="tag ${a.record ? 'record' : 'muted'}">${a.record ? 'Запись о судимости' : 'Отметка не требуется'}</span>${a.fine ? '<span class="tag fine">Либо штраф · сумма не указана</span>' : ''}</div>${a.additional.length ? `<p class="extra-sanction">+ ${a.additional.map(esc).join(' · ')}</p>` : ''}` : `<p class="article-excerpt">${esc(a.body)}</p>`}<div class="article-actions"><button class="source-button" data-source="${a.id}">Полный текст <span aria-hidden="true">↗</span></button>${a.priority ? `<span class="priority">Розыск: ${a.priority} / 5</span>` : ''}${a.months ? `<button class="add-button ${selected ? 'active' : ''}" data-add="${a.id}" aria-pressed="${selected}" aria-label="${selected ? 'Убрать' : 'Добавить'} статью ${a.number} ${selected ? 'из расчёта' : 'в расчёт'}">${selected ? '✓ В расчёте' : '+ В расчёт'}</button>` : ''}</div></article>`;
+    const selected = state.selected.has(a.id), favorite = state.favorites.has(a.number);
+    const term = a.months ? (a.exactTerm ? '' : 'До ') + a.months + ' мес.' : '';
+    const departmentStyles = { 'Ф': 'fsb', 'Р': 'mvd', 'С': 'sk', 'В': 'military' };
+    const badges = a.departments.map(d => '<span class="department-badge ' + departmentStyles[d] + '">' + esc(departments[d] || d) + '</span>').join('');
+    const favoriteButton = '<button class="favorite-button ' + (favorite ? 'active' : '') + '" data-favorite="' + a.number + '" aria-pressed="' + favorite + '" aria-label="' + (favorite ? 'Убрать статью ' + a.number + ' из избранного' : 'Добавить статью ' + a.number + ' в избранное') + '" title="' + (favorite ? 'Убрать из избранного' : 'В избранное') + '"><span aria-hidden="true">' + (favorite ? '★' : '☆') + '</span></button>';
+    const priority = a.priority ? '<span class="wanted-badge level-' + a.priority + '" aria-label="Приоритет розыска: ' + a.priority + ' из 5" title="Приоритет розыска: ' + a.priority + ' из 5"><span class="wanted-label">Розыск</span><span aria-hidden="true">' + '★'.repeat(a.priority) + '<span class="empty-stars">' + '☆'.repeat(5-a.priority) + '</span></span></span>' : '';
+    const excerpt = state.query ? matchExcerpt(a.body, state.query) : '';
+    let html = '<article class="article-card ' + (selected ? 'selected' : '') + '" id="card-' + a.id + '"><div class="article-top"><span class="article-number"><small>СТАТЬЯ</small>' + highlight(a.number, state.query) + '</span><div class="article-top-actions"><span class="departments">' + badges + '</span>' + favoriteButton + '</div></div><h2>' + highlight(a.title, state.query) + '</h2>';
+    if (a.sanction) {
+      html += '<div class="sanctions"><span class="tag term"><span aria-hidden="true">⏳</span>' + term + ' лишения свободы</span><span class="tag ' + (a.record ? 'record' : 'muted') + '">' + (a.record ? '<span aria-hidden="true">⚠</span> Запись о судимости' : 'Отметка не требуется') + '</span>' + (a.fine ? '<span class="tag fine"><span aria-hidden="true">💰</span> Либо штраф · сумма не указана</span>' : '') + '</div>';
+      if (a.additional.length) html += '<p class="extra-sanction">+ ' + a.additional.map(t => highlight(t,state.query)).join(' · ') + '</p>';
+      if (excerpt) html += '<p class="match-excerpt"><span class="excerpt-label">Совпадение в тексте</span>' + excerpt + '</p>';
+    } else html += '<p class="article-excerpt">' + (excerpt || esc(a.body)) + '</p>';
+    return html + '<div class="article-actions"><button class="source-button" data-source="' + a.id + '">Полный текст <span aria-hidden="true">↗</span></button>' + priority + (a.months ? '<button class="add-button ' + (selected ? 'active' : '') + '" data-add="' + a.id + '" aria-pressed="' + selected + '" aria-label="' + (selected ? 'Убрать' : 'Добавить') + ' статью ' + a.number + (selected ? ' из расчёта' : ' в расчёт') + '">' + (selected ? '✓ В расчёте' : '+ В расчёт') + '</button>' : '') + '</div></article>';
   }
   function updateResults() {
     const list = filteredArticles();
     $('#scopes').innerHTML = scopes();
-    $('#results-meta').innerHTML = `<span>Найдено статей: <b>${list.length}</b></span>${state.query || state.chapter || state.department || state.penalty ? '<button class="text-button" data-reset-filters>Сбросить фильтры</button>' : '<span>По порядку статей</span>'}`;
+    $('#quick-filters').innerHTML = quickFilters();
+    $('#results-meta').innerHTML = `<span>Найдено статей: <b>${list.length}</b></span>${state.query || state.chapter || state.department || state.penalty || state.topic || state.favoritesOnly ? '<button class="text-button" data-reset-filters>Сбросить фильтры</button>' : '<span>По порядку статей</span>'}`;
     $('#article-list').innerHTML = list.length ? list.slice(0, state.limit).map(card).join('') + (list.length > state.limit ? `<button class="load-more" data-more>Показать ещё ${Math.min(20, list.length - state.limit)} статей <span>· осталось ${list.length - state.limit}</span></button>` : '') : '<div class="no-results"><h2>Статей не найдено</h2><p>Попробуйте другой номер, часть слова или сбросьте фильтры.</p><button class="copy-button" data-reset-filters>Сбросить фильтры</button></div>';
+    if (state.favoritesOnly && state.favorites.size === 0) $('#article-list').innerHTML = '<div class="no-results"><h2>Избранное пока пусто</h2><p>Нажмите ☆ в карточке статьи — она появится здесь.</p><button class="copy-button" data-reset-filters>Перейти ко всем статьям</button></div>';
   }
   const modeNotes = {
     maximum: 'В пределах наиболее строгой статьи. Общее правило по ч. 3 ст. 5.2 УК.',
@@ -52,6 +100,8 @@
     const items = selectedItems();
     $('#calculator').innerHTML = `<div class="calc-title"><h2>Расчёт наказания <span class="calc-count">${items.length}</span></h2><p>Добавляйте статьи из справочника</p></div><div class="calc-body"><label class="field-label" for="calc-mode">Порядок расчёта</label><select id="calc-mode"><option value="maximum" ${state.mode === 'maximum' ? 'selected' : ''}>По наиболее строгой статье</option><option value="sum" ${state.mode === 'sum' ? 'selected' : ''}>Полное сложение санкций</option><option value="simplified" ${state.mode === 'simplified' ? 'selected' : ''}>Упрощённый порядок</option></select><p class="mode-note">${modeNotes[state.mode]}</p>${state.mode === 'simplified' ? `<label class="checkbox-line"><input type="checkbox" id="insult-exception" ${state.exception ? 'checked' : ''}>Ст. 17.3 совершена во время процессуальных действий — добавить её срок отдельно</label>` : ''}${items.length ? `<div class="calc-items">${items.map(calcItem).join('')}</div>` : '<div class="empty-calc"><span aria-hidden="true">§ +</span><strong>Статьи пока не выбраны</strong><p>Нажмите «В расчёт» в карточке статьи, чтобы увидеть общий срок.</p></div>'}<div id="calc-summary"></div><div class="calc-bottom"><button class="copy-button" id="copy-calculation" ${items.length ? '' : 'disabled'}>Копировать расчёт</button><button class="text-button" id="clear-calculation" ${items.length ? '' : 'disabled'}>Очистить</button></div><div class="rule-link">Правила назначения: ${ref('uk', '5.2')}<br>Отметка о судимости: ${ref('uk', '5.8')}</div></div>`;
     updateSummary();
+    $('.calc-bottom').insertAdjacentHTML('afterend', '<p id="save-status" class="save-status" role="status"></p>');
+    updateSaveStatus();
     if ($('#mobile-count')) $('#mobile-count').textContent = `(${items.length})`;
   }
   function recordText(r) { return r.record ? 'Требуется' : r.fineCount ? 'Уточнить вид штрафа' : 'Не требуется'; }
@@ -83,7 +133,7 @@
       const chapterHeading = prev !== a.chapter ? `<h2 class="doc-chapter-title">${esc(a.chapterTitle)}</h2>${!state.docQuery && chapter?.intro.length ? `<p class="chapter-intro">${esc(chapter.intro.join('\n\n'))}</p>` : ''}` : '';
       prev = a.chapter;
       const title = a.title.length > 150 ? a.title.slice(0, 150) + '…' : a.title;
-      return `${chapterHeading}<details class="document-article"><summary><span>Ст. ${a.number}</span>${esc(title)}</summary><div class="document-body">${a.title.length > 150 ? `<p><strong>${esc(a.title)}</strong></p>` : ''}${a.body.split(/\n\s*\n/).map(p => `<p>${esc(p)}</p>`).join('')}</div></details>`;
+      return `${chapterHeading}<details class="document-article" ${state.docQuery ? 'open' : ''}><summary><span>Ст. ${a.number}</span>${highlight(title, state.docQuery)}</summary><div class="document-body">${a.title.length > 150 ? `<p><strong>${highlight(a.title, state.docQuery)}</strong></p>` : ''}${a.body.split(/\n\s*\n/).map(p => `<p>${highlight(p, state.docQuery)}</p>`).join('')}</div></details>`;
     }).join('') || '<div class="no-results"><h2>Ничего не найдено</h2><p>Попробуйте другую формулировку или выберите все главы.</p></div>';
     if (filtered.length > state.docLimit) $('#doc-results').insertAdjacentHTML('beforeend', '<button class="load-more" data-doc-more>Показать ещё статьи</button>');
   }
@@ -143,12 +193,12 @@
   function showSource(id) {
     const a = articles.get(id);
     if (!a) return;
-    $('#source-title').textContent = a.heading;
-    $('#source-body').textContent = a.chapterTitle + '\n\n' + a.body;
+    $('#source-title').innerHTML = highlight(a.heading, state.view === 'uk' ? state.query : state.docQuery);
+    $('#source-body').innerHTML = esc(a.chapterTitle) + '\n\n' + highlight(a.body, state.view === 'uk' ? state.query : state.docQuery);
     $('#source-dialog').showModal();
   }
   function resetFilters() {
-    Object.assign(state, { query: '', chapter: '', department: '', penalty: '', scope: 'special', limit: 20 });
+    Object.assign(state, { query: '', chapter: '', department: '', penalty: '', scope: 'special', limit: 20, topic: '', favoritesOnly: false });
     renderUK();
     $('#article-search').focus();
   }
@@ -170,6 +220,15 @@
     if (!b) return;
     if (b.dataset.view) { location.hash = b.dataset.view; changeView(b.dataset.view); }
     if (b.dataset.source) showSource(b.dataset.source);
+    if (b.dataset.favorite) {
+      const n = b.dataset.favorite;
+      if (state.favorites.has(n)) state.favorites.delete(n); else state.favorites.add(n);
+      updateResults();
+      const button = document.querySelector('[data-favorite="' + n + '"]');
+      (button || document.querySelector('[data-favorites-only]')).focus({preventScroll:true});
+    }
+    if (b.hasAttribute('data-favorites-only')) { state.favoritesOnly = !state.favoritesOnly; state.scope = 'all'; state.limit = 20; updateResults(); }
+    if (b.dataset.topic) { state.topic = state.topic === b.dataset.topic ? '' : b.dataset.topic; state.scope = 'all'; state.limit = 20; updateResults(); }
     if (b.dataset.add) toggleArticle(b.dataset.add);
     if (b.dataset.remove) toggleArticle(b.dataset.remove, true);
     if (b.dataset.scope) { state.scope = b.dataset.scope; state.limit = 20; updateResults(); }
@@ -181,6 +240,7 @@
     if (b.id === 'close-dialog') $('#source-dialog').close();
     if (b.id === 'clear-calculation') { state.selected.clear(); renderCalculator(); updateResults(); toast('Расчёт очищен'); }
     if (b.id === 'copy-calculation') await copyCalculation();
+    if (b.matches('[data-add],[data-remove],[data-favorite],#clear-calculation')) saveState();
   });
   document.addEventListener('input', event => {
     const input = event.target;
@@ -199,6 +259,7 @@
       const n = input.valueAsNumber;
       state.selected.get(input.dataset.fineAmount).amount = Number.isFinite(n) && n >= 0 && n <= Number.MAX_SAFE_INTEGER ? n : null;
       updateSummary();
+      saveState();
     }
   });
   document.addEventListener('change', event => {
@@ -212,6 +273,7 @@
     if (input.id === 'calc-mode') { state.mode = input.value; renderCalculator(); }
     if (input.id === 'insult-exception') { state.exception = input.checked; updateSummary(); }
     if (input.dataset.penaltyType) { state.selected.get(input.dataset.penaltyType).type = input.value; renderCalculator(); }
+    if (input.matches('#calc-mode,#insult-exception,[data-penalty-type]')) saveState();
     if (input.id === 'doc-chapter') { state.docChapter = input.value; state.docLimit = 25; updateReader(); }
   });
   document.addEventListener('keydown', event => {
